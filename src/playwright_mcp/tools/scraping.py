@@ -34,11 +34,20 @@ async def browser_scrape(
     page = state.page
 
     if params.url:
-        await page.goto(params.url, wait_until="domcontentloaded")
+        await page.goto(params.url, wait_until="load", timeout=30_000)
     if params.wait_selector:
         await page.wait_for_selector(params.wait_selector, timeout=15_000)
     if params.wait_ms is not None and params.wait_ms > 0:
         await asyncio.sleep(params.wait_ms / 1000.0)
+    # When scraping the full page, wait for body to have content (avoids empty result on JS-rendered pages)
+    if not params.selector:
+        try:
+            await page.wait_for_function(
+                "() => document.body && (document.body.innerText.length > 0 || document.body.textContent.length > 0)",
+                timeout=10_000,
+            )
+        except Exception:
+            pass
 
     root = page
     if params.selector:
@@ -65,8 +74,23 @@ async def browser_scrape(
             text = (await a.inner_text()).strip()[:200]
             links.append(LinkItem(href=href, text=text))
         return ScrapeLinksResult(links=links)
-    # default: text
-    content = await root.inner_text()
+    # default: text — Page requires a selector; ElementHandle has inner_text() with no args
+    if root == page:
+        content = await page.locator("body").inner_text()
+        # Fallback: inner_text can be empty if content is hidden; try textContent
+        if not content or not content.strip():
+            content = await page.evaluate(
+                "() => (document.body && document.body.textContent) || ''"
+            ) or ""
+    else:
+        content = await root.inner_text()
+    if not content or not content.strip():
+        hint = ""
+        if not params.url:
+            hint = " Pass a 'url' in the tool arguments to scrape a specific page (e.g. {\"params\": {\"url\": \"https://example.com\"}})."
+        else:
+            hint = " Try adding wait_ms (e.g. 3000) or wait_selector for slow or JS-rendered pages."
+        content = f"No text was extracted from the page.{hint}"
     return ScrapeTextResult(content=truncate(content))
 
 

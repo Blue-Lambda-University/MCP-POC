@@ -17,15 +17,20 @@ dependencies = [
 
 [project.scripts]
 playwright-mcp = "playwright_mcp.main:main"
+playwright-mcp-repl = "scripts.mcp_repl:main"
+playwright-mcp-ui = "scripts.mcp_streamlit_ui:run_ui"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
 ]
+ui = [
+    "streamlit>=1.28",
+]
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "scripts"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
